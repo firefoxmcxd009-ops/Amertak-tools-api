@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="./style.css" />
+    <title>Universal Multi-Media Downloader</title>
+</head>
+<body>
+    <div class="main-container">
+        <h1 class="heading">ទាញយកវីដេអូ និងសំឡេងពីគ្រប់ Social Media</h1>
+        
+        <div class="input-container">
+            <input class="URL-input" placeholder="បិទភ្ជាប់លីង (YouTube, TikTok, FB, IG, X,...)" />
+            <select class="opt">
+                <option value="mp4">វីដេអូ (MP4)</option>
+                <option value="mp3">សំឡេង (MP3)</option>
+            </select>
+        </div>
+
+        <button class="convert-button" id="btn">ពិនិត្យលីង (Submit)</button>
+
+        <div id="loader" class="loader-container hidden">
+            <div class="spinner"></div>
+            <p>កំពុងទាញយកព័ត៌មានពី Social Media...</p>
+        </div>
+
+        <div id="result-box" class="result-container hidden">
+            <div id="video-preview" class="preview-layout hidden">
+                <img id="thumb-img" class="thumbnail" src="" alt="Thumbnail">
+            </div>
+
+            <div id="audio-preview" class="preview-layout hidden">
+                <div class="audio-icon-box">
+                    <svg viewBox="0 0 24 24" class="audio-svg"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                </div>
+            </div>
+
+            <div class="media-info">
+                <h3 id="media-title">ចំណងជើងវីដេអូ</h3>
+                <p>⏱️ រយៈពេល: <span id="media-duration">00:00</span></p>
+                <p>💾 ទំហំឯកសារ: <span id="media-size">0 MB</span></p>
+                <button id="download-btn" class="download-now-btn">ទាញយកឯកសារឥឡូវនេះ</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="./script.js"></script>
+</body>
+</html>
