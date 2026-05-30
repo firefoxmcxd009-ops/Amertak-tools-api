@@ -4,19 +4,19 @@ const { spawn } = require('child_process');
 const path = require('path');
 const app = express();
 
-// កំណត់ Port ឱ្យត្រូវតាម Render (លំនាំដើមយក Port 4000)
+// 1. DYNAMIC PORT FOR RENDER: Essential to prevent 502 Bad Gateway errors
 const PORT = process.env.PORT || 4000;
 
 app.use(cors());
 
-// កំណត់ផ្លូវទៅកាន់ថត bin ដែលបានបង្កើតឡើងដោយ render-build.sh
+// 2. ABSOLUTE PATH CONFIGURATION: Points directly to where render-build.sh installs the tools
 const BIN_DIR = '/opt/render/project/src/bin';
 
-// កំណត់លក្ខខណ្ឌស្វែងរកកម្មវិធី (បើនៅលើ Render ឱ្យរត់តាមផ្លូវចំ បើនៅលើម៉ាស៊ីន Local ឱ្យរត់ធម្មតា)
+// Check if running on Render production environment, otherwise fallback to local system paths
 const YTDLP_PATH = process.env.RENDER ? path.join(BIN_DIR, 'yt-dlp') : 'yt-dlp';
 const FFMPEG_PATH = process.env.RENDER ? path.join(BIN_DIR, 'ffmpeg') : 'ffmpeg';
 
-// មុខងារជំនួយសម្រាប់បំប្លែងវិនាទី (Seconds) ទៅជាទម្រង់ នាទី:វិនាទី (MM:SS)
+// Helper function: Converts total seconds into MM:SS format
 function formatDuration(seconds) {
     if (!seconds) return "មិនច្បាស់";
     const mins = Math.floor(seconds / 60);
@@ -24,7 +24,7 @@ function formatDuration(seconds) {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-// មុខងារជំនួយសម្រាប់បំប្លែង Bytes ទៅជា Megabytes (MB)
+// Helper function: Converts bytes into human-readable Megabytes (MB)
 function formatSize(bytes) {
     if (!bytes) return "ស្វ័យប្រវត្តិតាមការទាញយក";
     const mb = bytes / (1024 * 1024);
@@ -32,8 +32,21 @@ function formatSize(bytes) {
 }
 
 /**
- * 1. API Endpoint: សម្រាប់ទាញយកព័ត៌មានលម្អិតរបស់វីដេអូ/សំឡេង (Metadata Info)
- * URL: /info?url=<SOCIAL_MEDIA_URL>&format=<mp3/mp4>
+ * BASE ROUTE: Home path welcome message
+ * URL: https://amertak-tools-api.onrender.com/
+ */
+app.get('/', (req, res) => {
+    res.send(`
+        <div style="font-family: sans-serif; text-align: center; margin-top: 10%;">
+            <h1 style="color: #0084ff;">🎉 Universal Social Media Downloader API is Live!</h1>
+            <p style="color: #555;">Your Node.js Backend backend is running flawlessly on Render.</p>
+        </div>
+    `);
+});
+
+/**
+ * 1. METADATA ENDPOINT: Fetches Title, Thumbnail, Duration, and estimated size.
+ * URL: /info?url=<SOCIAL_URL>&format=<mp3/mp4>
  */
 app.get('/info', (req, res) => {
     const videoURL = req.query.url;
@@ -43,9 +56,9 @@ app.get('/info', (req, res) => {
         return res.status(400).json({ error: "សូមបញ្ចូល URL វីដេអូ!" });
     }
 
-    console.log(`[Info Request] កំពុងពិនិត្យលីង: ${videoURL}`);
+    console.log(`[Info Fetching] Querying metadata for: ${videoURL}`);
 
-    // ហៅ yt-dlp មកដំណើរការទាញយកទិន្នន័យ JSON សង្ខេប
+    // Call yt-dlp to dump all raw metadata into clean JSON format string without downloading the media
     const ytDlp = spawn(YTDLP_PATH, ['--dump-json', videoURL]);
     let stdoutData = '';
     let stderrData = '';
@@ -55,17 +68,17 @@ app.get('/info', (req, res) => {
 
     ytDlp.on('close', (code) => {
         if (code !== 0) {
-            console.error(`[yt-dlp Error]: ${stderrData}`);
-            return res.status(500).json({ error: "មិនអាចអានទិន្នន័យពីលីងនេះបានទេ! សូមប្រាកដថាវាជាលីងសាធារណៈ (Public)។" });
+            console.error(`[yt-dlp Info Error]: ${stderrData}`);
+            return res.status(500).json({ error: "មិនអាចអានទិន្នន័យពីលីងនេះបានទេ។ សូមប្រាកដថាវាជាលីងសាធារណៈ (Public)!" });
         }
 
         try {
             const json = JSON.parse(stdoutData);
             
-            // គណនាទំហំហ្វាយប្រហាក់ប្រហែល
+            // Extract file size from standard or approximate parameters inside standard JSON structure
             let rawSize = json.filesize || json.filesize_approx;
             
-            // បើអ្នកប្រើប្រាស់ជ្រើសរើសយក MP3 យើងធ្វើការប៉ាន់ស្មានទំហំសំឡេង (128kbps audio ស៊ីប្រហែល 1MB/នាទី)
+            // If user demands MP3, media stream payload is downscaled drastically (~1MB/Min at 128kbps)
             if (format === 'mp3' && json.duration) {
                 rawSize = (json.duration * 128000) / 8;
             }
@@ -85,8 +98,8 @@ app.get('/info', (req, res) => {
 });
 
 /**
- * 2. API Endpoint: សម្រាប់ទាញយកតែសំឡេង (MP3)
- * URL: /downloadmp3?url=<SOCIAL_MEDIA_URL>
+ * 2. AUDIO DOWNLOAD ENDPOINT: Extract and stream purely audio payloads (MP3 format)
+ * URL: /downloadmp3?url=<SOCIAL_URL>
  */
 app.get('/downloadmp3', (req, res) => {
     const videoURL = req.query.url;
@@ -95,14 +108,14 @@ app.get('/downloadmp3', (req, res) => {
         return res.status(400).send("សូមបញ្ចូល URL វីដេអូ!");
     }
 
-    // កំណត់ Header សម្រាប់ប្រាប់ Browser ឱ្យទាញយកជាហ្វាយអូឌីយ៉ូ .mp3
+    // Force browsers to trigger immediate file saving attachment download sequences
     res.header('Content-Disposition', `attachment; filename="audio_${Date.now()}.mp3"`);
     res.header('Content-Type', 'audio/mpeg');
 
-    // កំណត់ Arguments សម្រាប់បំប្លែងវីដេអូទៅជា MP3 គុណភាពខ្ពស់
+    // Command arguments to isolate sound frequencies, apply high audio compression layouts
     const args = ['-x', '--audio-format', 'mp3', '--audio-quality', '0'];
     
-    // បើនៅលើ Render ត្រូវប្រាប់ឱ្យ yt-dlp ស្គាល់ទីតាំង ffmpeg ឱ្យចំ
+    // Explicitly hook ffmpeg environment locations into operational arguments when running on Render
     if (process.env.RENDER) {
         args.push('--ffmpeg-location', FFMPEG_PATH);
     }
@@ -110,17 +123,17 @@ app.get('/downloadmp3', (req, res) => {
 
     const ytDlp = spawn(YTDLP_PATH, args);
     
-    // បញ្ជូនទិន្នន័យទម្រង់ Stream ទៅកាន់អ្នកប្រើប្រាស់ (Real-time Streaming)
+    // Stream stream data buffer back onto network client response sequentially
     ytDlp.stdout.pipe(res);
 
     ytDlp.on('close', (code) => {
-        if (code !== 0) console.log(`[MP3 Download] បានបញ្ចប់ជាមួយ Error Code: ${code}`);
+        if (code !== 0) console.log(`[MP3 Process Ended] Error code variant: ${code}`);
     });
 });
 
 /**
- * 3. API Endpoint: សម្រាប់ទាញយកវីដេអូ (MP4)
- * URL: /downloadmp4?url=<SOCIAL_MEDIA_URL>
+ * 3. VIDEO DOWNLOAD ENDPOINT: Fetch integrated video with embedded audio tracks (MP4 format)
+ * URL: /downloadmp4?url=<SOCIAL_URL>
  */
 app.get('/downloadmp4', (req, res) => {
     const videoURL = req.query.url;
@@ -129,11 +142,10 @@ app.get('/downloadmp4', (req, res) => {
         return res.status(400).send("សូមបញ្ចូល URL វីដេអូ!");
     }
 
-    // កំណត់ Header សម្រាប់ប្រាប់ Browser ឱ្យទាញយកជាហ្វាយវីដេអូ .mp4
     res.header('Content-Disposition', `attachment; filename="video_${Date.now()}.mp4"`);
     res.header('Content-Type', 'video/mp4');
 
-    // កំណត់យកទម្រង់ MP4 ដែលមានទាំងរូបភាព និងសំឡេងស្រាប់ (Single file container)
+    // Request direct high standard multiplexed MP4 formats
     const args = ['-f', 'b[ext=mp4]/b'];
     
     if (process.env.RENDER) {
@@ -143,15 +155,15 @@ app.get('/downloadmp4', (req, res) => {
 
     const ytDlp = spawn(YTDLP_PATH, args);
     
-    // បញ្ជូនទិន្នន័យទម្រង់ Stream
+    // Pipe operational system standard outputs back downstream
     ytDlp.stdout.pipe(res);
 
     ytDlp.on('close', (code) => {
-        if (code !== 0) console.log(`[MP4 Download] បានបញ្ចប់ជាមួយ Error Code: ${code}`);
+        if (code !== 0) console.log(`[MP4 Process Ended] Error code variant: ${code}`);
     });
 });
 
-// បើកដំណើរការ Web Server
+// Run server listener
 app.listen(PORT, () => {
     console.log(`=======================================================`);
     console.log(`🚀 Universal Backend Server is running on port ${PORT}`);
