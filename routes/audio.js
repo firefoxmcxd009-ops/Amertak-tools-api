@@ -6,27 +6,23 @@ const router = express.Router();
 router.post("/", async (req, res) => {
   try {
     const { url } = req.body;
-
-    if (!url) {
-      return res.status(400).json({ error: "URL required" });
-    }
-
+    
     const info = await ytdl.getInfo(url);
-
-    const audioFormat = ytdl.chooseFormat(info.formats, {
-      quality: "highestaudio",
-      filter: "audioonly"
+    
+    const audio = ytdl.chooseFormat(info.formats, {
+      filter: "audioonly",
+      quality: "highestaudio"
     });
-
+    
     res.json({
       status: "success",
       type: "audio",
       title: info.videoDetails.title,
-      download: audioFormat.url
+      download: audio.url
     });
-
+    
   } catch (err) {
-    res.status(500).json({
+    res.json({
       status: "error",
       message: err.message
     });
